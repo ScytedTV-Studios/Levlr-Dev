@@ -1,10 +1,11 @@
-const { Client, GatewayIntentBits, Intents, MessageEmbed } = require('discord.js');
+const { Client, GatewayIntentBits, Intents, Collection } = require('discord.js');
 const fs = require('fs');
 const csv = require('csv-parser');
 const { REST } = require('@discordjs/rest');
 const { Routes } = require('discord-api-types/v9');
+const dotenv = require('dotenv');
 
-require('dotenv').config();
+dotenv.config();
 
 const client = new Client({
   intents: [
@@ -14,21 +15,18 @@ const client = new Client({
 });
 
 const TOKEN = process.env.BOT_TOKEN;
+const PREFIX = '!'; // Change this to your desired prefix
+
+client.commands = new Collection();
 
 const commands = [
-  {
-    name: 'stats',
-    description: 'Check your stats',
-    options: [
-      {
-        name: 'user',
-        description: 'The user whose stats you want to check',
-        type: 6, // Type 6 represents USER in the Discord API
-        required: false, // Make it optional
-      },
-    ],
-  },
+  'stats', // Add other command names here
 ];
+
+for (const command of commands) {
+  const commandModule = require(`./commands/${command}.js`);
+  client.commands.set(command, commandModule);
+}
 
 const rest = new REST({ version: '10' }).setToken(TOKEN);
 
@@ -42,9 +40,18 @@ const xpCooldowns = new Map();
   try {
     console.log('Started refreshing global (/) commands.');
 
+    const commandData = commands.map((command) => {
+      const commandModule = client.commands.get(command);
+      return {
+        name: command,
+        description: commandModule.data.description,
+        options: commandModule.data.options,
+      };
+    });
+
     await rest.put(
       Routes.applicationCommands(process.env.CLIENT_ID),
-      { body: commands },
+      { body: commandData },
     );
 
     console.log('Successfully reloaded global (/) commands.');
@@ -62,33 +69,13 @@ client.on('interactionCreate', async (interaction) => {
 
   const { commandName, options } = interaction;
 
-  if (commandName === 'stats') {
-    // Get the mentioned user or the user specified by ID
-    const targetUserOption = options.getUser('user');
-    const targetUserId = targetUserOption ? targetUserOption.id : interaction.user.id;
-
+  if (client.commands.has(commandName)) {
     try {
-      // Fetch the user's data from the CSV file
-      const userData = await getUserDataFromCSV(targetUserId);
-
-      if (!userData) {
-        return interaction.reply('This user has no data yet. They should send some messages to earn XP!');
-      }
-
-      // Create an object for the embed with an integer color
-      const embed = {
-        title: `Stats for ${targetUserOption ? targetUserOption.username : interaction.user.username}`,
-        fields: [
-          { name: 'Level', value: userData.level, inline: true },
-          { name: 'XP', value: userData.xp, inline: true },
-        ],
-        color: 0x0099ff, // Integer color value
-      };
-
-      await interaction.reply({ embeds: [embed] });
+      const command = client.commands.get(commandName);
+      await command.execute(interaction, options);
     } catch (error) {
-      console.error('Error fetching user data:', error);
-      return interaction.reply('An error occurred while fetching user data.');
+      console.error('Error executing command:', error);
+      await interaction.reply('An error occurred while executing the command.');
     }
   }
 });
@@ -150,10 +137,10 @@ function saveUserData(userData) {
           data[userIndex].level++;
           data[userIndex].xp -= xpRequiredForNextLevel;
           xpRequiredForNextLevel = calculateXpRequiredForNextLevel(data[userIndex].level);
-          // const channel = client.channels.cache.get(message.channelId);
-          // if (channel) {
-            // channel.send(`${userData.username} leveled up to level ${data[userIndex].level}!`);
-          // }
+          const channel = client.channels.cache.get(message.channelId);
+          if (channel) {
+            channel.send(`${userData.username} leveled up to level ${data[userIndex].level}!`);
+          }
         }
       } else {
         userData.level = 1;
