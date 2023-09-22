@@ -81,7 +81,7 @@ client.on('interactionCreate', async (interaction) => {
 });
 
 client.on('messageCreate', async (message) => {
-  if (message.author.bot) return; // Ignore messages from bots
+  // if (message.author.bot) return; // Ignore messages from bots
 
   // Handle leveling logic here
   const userId = message.author.id;
@@ -107,7 +107,7 @@ function getUserDataFromCSV(userId) {
   return new Promise((resolve, reject) => {
     // Load existing data from the CSV file
     const data = [];
-    fs.createReadStream('userdata.csv')
+    fs.createReadStream('../API/levlr/userdata.csv')
       .pipe(csv())
       .on('data', (row) => data.push(row))
       .on('end', () => {
@@ -124,7 +124,7 @@ function getUserDataFromCSV(userId) {
 function saveUserData(userData) {
   // Load existing data from the CSV file
   const data = [];
-  fs.createReadStream('userdata.csv')
+  fs.createReadStream('../API/levlr/userdata.csv')
     .pipe(csv())
     .on('data', (row) => data.push(row))
     .on('end', () => {
@@ -137,17 +137,17 @@ function saveUserData(userData) {
           data[userIndex].level++;
           data[userIndex].xp -= xpRequiredForNextLevel;
           xpRequiredForNextLevel = calculateXpRequiredForNextLevel(data[userIndex].level);
-          const channel = client.channels.cache.get(message.channelId);
-          if (channel) {
-            channel.send(`${userData.username} leveled up to level ${data[userIndex].level}!`);
-          }
+          // const channel = client.channels.cache.get(message.channelId);
+          // if (channel) {
+          //   channel.send(`${userData.username} leveled up to level ${data[userIndex].level}!`);
+          // }
         }
       } else {
         userData.level = 1;
         data.push(userData);
       }
 
-      const csvStream = fs.createWriteStream('userdata.csv');
+      const csvStream = fs.createWriteStream('../API/levlr/userdata.csv');
       csvStream.write('userId,username,xp,level\n'); // Removed messageCount from the header
       data.forEach((user) => {
         csvStream.write(`${user.userId},${user.username},${user.xp},${user.level}\n`);
